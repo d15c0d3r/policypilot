@@ -5,46 +5,16 @@
       "name": "HDFC Ergo",
       "full_name": "HDFC Ergo General Insurance Company",
       "type": "Health Insurance",
-      "plans": [
-        "Optima Secure",
-        "Optima Restore",
-        "My Health Suraksha",
-        "Health Wallet"
-      ],
-      "premium_range": "₹5,000 - ₹50,000 per year",
-      "coverage_range": "₹3 Lakhs - ₹1 Crore",
       "claim_settlement_ratio": "97.8%",
-      "network_hospitals": 13000,
-      "key_features": [
-        "No-claim bonus up to 50%",
-        "Restoration of sum insured",
-        "Day-care procedures covered",
-        "Pre and post hospitalization cover"
-      ],
-      "policy_document": "hdfc-ergo.pdf"
+      "active": true
     },
     {
       "id": "icici",
       "name": "ICICI Lombard",
       "full_name": "ICICI Lombard General Insurance Company",
       "type": "Health Insurance",
-      "plans": [
-        "Health Booster",
-        "Complete Health Insurance",
-        "IL Take Care",
-        "Golden Shield"
-      ],
-      "premium_range": "₹4,500 - ₹45,000 per year",
-      "coverage_range": "₹2 Lakhs - ₹1 Crore",
       "claim_settlement_ratio": "96.5%",
-      "network_hospitals": 9500,
-      "key_features": [
-        "Cumulative bonus up to 50%",
-        "Free health check-up",
-        "Ambulance cover",
-        "Organ donor expenses covered"
-      ],
-      "policy_document": "icici-lombard.pdf"
+      "active": true
     }
   ]
 }

@@ -11,6 +11,7 @@ UPLOADS_DIR = DATA_DIR / "uploads"
 CHROMA_DIR = DATA_DIR.parent.parent / "chroma_db"
 PROVIDERS_FILE = DATA_DIR / "providers.json"
 
+# Allowed PDF categories for uploads; each gets a subfolder under UPLOADS_DIR
 PDF_CATEGORIES = [
     "health_insurance",
     "car_insurance",

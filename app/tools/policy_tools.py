@@ -39,3 +39,35 @@ def search_policy(query: str, category: str | None = None) -> str:
         )
 
     return "\n\n---\n\n".join(results)
+
+
+class ComparePoliciesInput(BaseModel):
+    query: str = Field(
+        description="The aspect to compare between categories "
+        "(e.g., 'waiting period for pre-existing conditions', 'coverage limits')."
+    )
+    categories: list[str] = Field(
+        description=f"Two or more categories to compare. Allowed: {PDF_CATEGORIES}",
+    )
+
+
+@tool(args_schema=ComparePoliciesInput)
+def compare_policies(query: str, categories: list[str] | None = None) -> str:
+    """Compare policy information across different categories for a specific aspect.
+    Retrieves relevant chunks from each category for side-by-side comparison."""
+    vectorstore = get_vectorstore()
+    cats = categories or PDF_CATEGORIES
+
+    sections = []
+    for cat in cats:
+        label = cat.replace("_", " ").title()
+        docs = vectorstore.similarity_search(
+            query, k=3, filter={"category": cat}
+        )
+        if docs:
+            content = "\n".join(doc.page_content for doc in docs)
+            sections.append(f"**{label}:**\n{content}")
+        else:
+            sections.append(f"**{label}:**\nNo relevant information found.")
+
+    return "\n\n---\n\n".join(sections)
