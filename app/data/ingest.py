@@ -61,3 +61,27 @@ def ingest_single_pdf(pdf_path: Path, category: str, source_filename: str | None
     )
     vectorstore.add_documents(chunks)
     return len(chunks)
+
+
+def ingest_all_uploads(force: bool = False) -> int:
+    """Scan UPLOADS_DIR by category and ingest every PDF into ChromaDB. Returns total chunks added."""
+    total = 0
+    for category in PDF_CATEGORIES:
+        category_dir = UPLOADS_DIR / category
+        if not category_dir.is_dir():
+            continue
+        for pdf_path in category_dir.glob("*.pdf"):
+            try:
+                n = ingest_single_pdf(pdf_path, category, pdf_path.name)
+                total += n
+                print(f"  Ingested {pdf_path.name} ({n} chunks)")
+            except Exception as e:
+                print(f"  Skip {pdf_path.name}: {e}")
+    return total
+
+
+if __name__ == "__main__":
+    from dotenv import load_dotenv
+    load_dotenv()
+    print("Ingesting all PDFs from uploads...")
+    ingest_all_uploads()

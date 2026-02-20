@@ -3,4 +3,5 @@
 __pycache__/
 *.pyc
 chroma_db/
+app/data/uploads/
 .DS_Store
