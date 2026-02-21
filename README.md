@@ -4,4 +4,13 @@ Insurance policy assistant. Upload policy PDFs (health, car, term, travel, etc.)
 
 ## Setup
 
-TODO
+```bash
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+## CLI
+
+```bash
+python -m app.main
+```
