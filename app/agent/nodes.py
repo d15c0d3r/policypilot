@@ -2,9 +2,13 @@ from typing import Annotated
 from typing_extensions import TypedDict
 
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import SystemMessage, ToolMessage
+from langchain_core.messages import SystemMessage, AIMessage, ToolMessage
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
+
+from app.tools.provider_tools import list_providers, get_provider_details
+from app.tools.policy_tools import search_policy, compare_policies
+from app.agent.state import AgentState
 
 llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
 
@@ -60,3 +64,122 @@ def build_specialist_agent(system_prompt: str, tools: list):
     graph.add_edge("call_tools", "call_model")
 
     return graph.compile()
+
+
+# ── Supervisor: routes to the right specialist ──
+
+SUPERVISOR_PROMPT = """You are a supervisor agent for PolicyPilot, an insurance policy assistant.
+Your job is to analyze the user's query and decide which specialist agent should handle it.
+
+You MUST respond with EXACTLY one of these agent names:
+- "provider_agent": for questions about which providers exist, their settlement ratio, or active status
+- "policy_expert": for detailed policy questions (coverage, plans, exclusions, claims, waiting periods, etc.)
+- "comparison_agent": for comparing policies or features across different providers or categories
+- "guardrail": for queries unrelated to insurance
+
+Examples:
+- "What insurance companies do you have?" → provider_agent
+- "What is the claim settlement ratio?" → provider_agent
+- "What plans does this provider offer?" → policy_expert
+- "Does my policy cover pre-existing conditions?" → policy_expert
+- "Compare these two providers on coverage" → comparison_agent
+- "What's the weather today?" → guardrail
+
+Respond with ONLY the agent name, nothing else."""
+
+
+def supervisor_node(state: AgentState) -> dict:
+    messages = [SystemMessage(content=SUPERVISOR_PROMPT), *state["messages"]]
+    response = llm.invoke(messages)
+    next_agent = response.content.strip().lower().replace('"', "")
+
+    valid_agents = {"provider_agent", "policy_expert",
+                    "comparison_agent", "guardrail"}
+    if next_agent not in valid_agents:
+        next_agent = "policy_expert"
+
+    return {"next_agent": next_agent}
+
+
+# ── Guardrail: handles off-topic queries ──
+
+def guardrail_node(state: AgentState) -> dict:
+    return {
+        "messages": [
+            AIMessage(
+                content=(
+                    "I'm PolicyPilot, your insurance policy assistant. I can help you with:\n"
+                    "- Listing available insurance providers\n"
+                    "- Detailed policy information (coverage, exclusions, claims, etc.)\n"
+                    "- Comparing policies of the same kind (e.g. two health insurance plans)\n\n"
+                    "Could you please ask a question related to your uploaded policies?"
+                )
+            )
+        ]
+    }
+
+
+# ── Build specialist subgraphs ──
+
+PROVIDER_AGENT_PROMPT = """You are the Provider Agent for PolicyPilot.
+You specialize in answering questions about available insurance providers,
+their claim settlement ratios, and whether they are currently active.
+
+Use the tools available to you to look up provider information.
+Be concise, helpful, and accurate. Only answer based on the data from your tools."""
+
+_provider_agent = build_specialist_agent(
+    PROVIDER_AGENT_PROMPT,
+    [list_providers, get_provider_details],
+)
+
+
+POLICY_EXPERT_PROMPT = """You are the Policy Expert Agent for PolicyPilot.
+You specialize in answering detailed questions about insurance policies
+by searching through actual policy documents.
+
+Use the search_policy tool to find relevant information from policy PDFs.
+You can optionally filter by category (health_insurance, car_insurance, term_insurance, etc.).
+
+CRITICAL RULES:
+- Only answer based on information retrieved from the policy documents.
+- If the search returns no relevant results, say "I couldn't find that information in the policy documents."
+- Always cite which document the information comes from.
+- Never make up policy details."""
+
+_policy_expert_agent = build_specialist_agent(
+    POLICY_EXPERT_PROMPT,
+    [search_policy],
+)
+
+
+COMPARISON_AGENT_PROMPT = """You are the Comparison Agent for PolicyPilot.
+You specialize in comparing insurance policies across different providers and categories.
+
+Use the compare_policies tool to retrieve information from multiple providers simultaneously.
+You can also use get_provider_details for structured metadata comparisons.
+
+Present comparisons in a clear, structured format. Highlight key differences.
+Only use information from the tools — never fabricate policy details."""
+
+_comparison_agent = build_specialist_agent(
+    COMPARISON_AGENT_PROMPT,
+    [compare_policies, get_provider_details],
+)
+
+
+# ── Node wrappers that invoke subgraphs and return results to parent graph ──
+
+def provider_agent_node(state: AgentState) -> dict:
+    result = _provider_agent.invoke({"messages": state["messages"]})
+    return {"messages": [AIMessage(content=result["messages"][-1].content)]}
+
+
+def policy_expert_node(state: AgentState) -> dict:
+    result = _policy_expert_agent.invoke({"messages": state["messages"]})
+    return {"messages": [AIMessage(content=result["messages"][-1].content)]}
+
+
+def comparison_agent_node(state: AgentState) -> dict:
+    result = _comparison_agent.invoke({"messages": state["messages"]})
+    return {"messages": [AIMessage(content=result["messages"][-1].content)]}
