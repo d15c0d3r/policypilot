@@ -1,17 +1,21 @@
 import uuid
+import json
+import asyncio
 from pathlib import Path
 
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI, File, UploadFile, BackgroundTasks, HTTPException, Form
+from fastapi import FastAPI, File, UploadFile, BackgroundTasks, HTTPException, Form, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from langchain_core.messages import HumanMessage, AIMessageChunk
 
 from app.data.ingest import (
     PDF_CATEGORIES,
     UPLOADS_DIR,
     ingest_single_pdf,
 )
+from app.agent.graph import build_graph
 
 
 app = FastAPI(title="PolicyPilot API", version="0.1.0")
@@ -23,6 +27,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+graph = build_graph()
 
 
 # ── Upload endpoints ──
@@ -71,3 +77,76 @@ async def upload_pdf(
         "category": category,
         "filename": file.filename,
     }
+
+
+# ── WebSocket chat with streaming ──
+
+@app.websocket("/ws/chat")
+async def chat_ws(ws: WebSocket):
+    await ws.accept()
+    thread_id = str(uuid.uuid4())
+    config = {"configurable": {"thread_id": thread_id}}
+
+    try:
+        while True:
+            data = await ws.receive_text()
+            try:
+                payload = json.loads(data)
+            except json.JSONDecodeError:
+                payload = {"message": data}
+
+            user_text = payload.get("message", "").strip()
+            if not user_text:
+                continue
+
+            await ws.send_text(json.dumps({"type": "start"}))
+
+            try:
+                final_answer = ""
+                async for event in graph.astream_events(
+                    {"messages": [HumanMessage(content=user_text)]},
+                    config=config,
+                    version="v2",
+                ):
+                    kind = event.get("event")
+                    if kind == "on_chat_model_stream":
+                        node = event.get("metadata", {}).get("langgraph_node", "")
+                        if node == "supervisor":
+                            continue
+                        chunk = event.get("data", {}).get("chunk")
+                        if chunk and hasattr(chunk, "content") and chunk.content:
+                            raw = chunk.content
+                            if isinstance(raw, list):
+                                token = "".join(
+                                    part.get("text", "") if isinstance(part, dict) else str(part)
+                                    for part in raw
+                                )
+                            else:
+                                token = str(raw)
+                            if token:
+                                final_answer += token
+                                await ws.send_text(json.dumps({"type": "token", "content": token}))
+
+                if not final_answer:
+                    state = graph.get_state(config)
+                    msgs = state.values.get("messages", [])
+                    if msgs:
+                        raw = msgs[-1].content if hasattr(msgs[-1], "content") else str(msgs[-1])
+                        if isinstance(raw, list):
+                            final_answer = "".join(
+                                part.get("text", "") if isinstance(part, dict) else str(part)
+                                for part in raw
+                            )
+                        else:
+                            final_answer = str(raw)
+                    if not final_answer:
+                        final_answer = "I couldn't generate a response. Please try again."
+                    await ws.send_text(json.dumps({"type": "token", "content": final_answer}))
+
+                await ws.send_text(json.dumps({"type": "end"}))
+
+            except Exception as e:
+                await ws.send_text(json.dumps({"type": "error", "content": str(e)}))
+
+    except WebSocketDisconnect:
+        pass
