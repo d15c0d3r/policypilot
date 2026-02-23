@@ -1,7 +1,30 @@
+# Environment
 .env
 .venv/
-__pycache__/
-*.pyc
+
+# Data (generated at runtime)
 chroma_db/
 app/data/uploads/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# OS
 .DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+.cursor/
+*.swp
+*.swo
