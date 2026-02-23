@@ -1,0 +1,49 @@
+/* ── Shell layout ── */
+.shell {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 200px;
+  flex-shrink: 0;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  display: flex;
+  flex-direction: column;
+  padding: 1.25rem 1rem;
+  gap: 1.5rem;
+}
+.logo {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: 0.02em;
+}
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.nav button {
+  text-align: left;
+  background: none;
+  border: none;
+  color: #aaa;
+  font-size: 0.95rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.nav button:hover { background: rgba(255,255,255,0.06); color: #fff; }
+.nav button.active { background: rgba(255,255,255,0.1); color: #fff; font-weight: 600; }
+
+/* ── Main area ── */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
