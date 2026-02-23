@@ -43,31 +43,59 @@ def search_policy(query: str, category: str | None = None) -> str:
 
 class ComparePoliciesInput(BaseModel):
     query: str = Field(
-        description="The aspect to compare between categories "
-        "(e.g., 'waiting period for pre-existing conditions', 'coverage limits')."
+        description="The aspect to compare (e.g., 'waiting period', 'ambulance coverage', 'claim process')."
     )
-    categories: list[str] = Field(
-        description=f"Two or more categories to compare. Allowed: {PDF_CATEGORIES}",
+    category: str | None = Field(
+        default=None,
+        description=f"Optional. The insurance category to compare within: {PDF_CATEGORIES}. "
+        "Leave empty to auto-detect from uploaded documents.",
     )
 
 
 @tool(args_schema=ComparePoliciesInput)
-def compare_policies(query: str, categories: list[str] | None = None) -> str:
-    """Compare policy information across different categories for a specific aspect.
-    Retrieves relevant chunks from each category for side-by-side comparison."""
+def compare_policies(query: str, category: str | None = None) -> str:
+    """Compare policy information between different providers.
+    Retrieves relevant chunks grouped by source document for side-by-side comparison.
+    Optionally filter by category. If results span multiple categories, a warning is returned
+    asking the user to specify the insurance type."""
     vectorstore = get_vectorstore()
-    cats = categories or PDF_CATEGORIES
+
+    search_kwargs = {"k": 8}
+    if category:
+        if category not in PDF_CATEGORIES:
+            return f"Invalid category '{category}'. Allowed categories: {PDF_CATEGORIES}"
+        search_kwargs["filter"] = {"category": category}
+
+    docs = vectorstore.similarity_search(query, **search_kwargs)
+
+    if not docs:
+        return "No relevant information found in the uploaded policy documents."
+
+    categories_found = set(doc.metadata.get("category", "unknown") for doc in docs)
+    if len(categories_found) > 1 and not category:
+        cats = ", ".join(sorted(categories_found))
+        return (
+            f"The results span multiple insurance categories ({cats}). "
+            "Policies can only be compared within the same type. "
+            "Please specify which insurance type you'd like to compare."
+        )
+
+    by_source: dict[str, list[str]] = {}
+    for doc in docs:
+        source = doc.metadata.get("source_file", "unknown")
+        by_source.setdefault(source, []).append(doc.page_content)
+
+    if len(by_source) < 2:
+        cat_label = (category or list(categories_found)[0]).replace("_", " ")
+        return (
+            f"Only found documents from one provider in {cat_label}. "
+            "Please upload policies from at least two providers to enable comparison."
+        )
 
     sections = []
-    for cat in cats:
-        label = cat.replace("_", " ").title()
-        docs = vectorstore.similarity_search(
-            query, k=3, filter={"category": cat}
-        )
-        if docs:
-            content = "\n".join(doc.page_content for doc in docs)
-            sections.append(f"**{label}:**\n{content}")
-        else:
-            sections.append(f"**{label}:**\nNo relevant information found.")
+    for source, chunks in by_source.items():
+        label = source.replace(".pdf", "").replace("-", " ").replace("_", " ").title()
+        content = "\n".join(chunks)
+        sections.append(f"**{label}:**\n{content}")
 
     return "\n\n---\n\n".join(sections)

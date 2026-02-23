@@ -73,16 +73,18 @@ Your job is to analyze the user's query and decide which specialist agent should
 
 You MUST respond with EXACTLY one of these agent names:
 - "provider_agent": for questions about which providers exist, their settlement ratio, or active status
-- "policy_expert": for detailed policy questions (coverage, plans, exclusions, claims, waiting periods, etc.)
-- "comparison_agent": for comparing policies or features across different providers or categories
+- "policy_expert": for detailed policy questions (coverage, plans, exclusions, claims, waiting periods, etc.), including listing details of one or more policies
+- "comparison_agent": for comparing two or more policies side-by-side on specific aspects
 - "guardrail": for queries unrelated to insurance
 
 Examples:
 - "What insurance companies do you have?" → provider_agent
 - "What is the claim settlement ratio?" → provider_agent
 - "What plans does this provider offer?" → policy_expert
+- "Tell me about the HDFC and ICICI policies" → policy_expert
 - "Does my policy cover pre-existing conditions?" → policy_expert
-- "Compare these two providers on coverage" → comparison_agent
+- "Compare HDFC and ICICI on ambulance coverage" → comparison_agent
+- "Which policy has a better claim process?" → comparison_agent
 - "What's the weather today?" → guardrail
 
 Respond with ONLY the agent name, nothing else."""
@@ -141,6 +143,11 @@ by searching through actual policy documents.
 Use the search_policy tool to find relevant information from policy PDFs.
 You can optionally filter by category (health_insurance, car_insurance, term_insurance, etc.).
 
+When the user asks about multiple policies (e.g. "tell me about HDFC and ICICI"),
+call the search_policy tool once per provider or topic to gather details for each, then
+present the information clearly for each policy. This is NOT a comparison — just list the
+details for each one.
+
 CRITICAL RULES:
 - Only answer based on information retrieved from the policy documents.
 - If the search returns no relevant results, say "I couldn't find that information in the policy documents."
@@ -154,10 +161,15 @@ _policy_expert_agent = build_specialist_agent(
 
 
 COMPARISON_AGENT_PROMPT = """You are the Comparison Agent for PolicyPilot.
-You specialize in comparing insurance policies across different providers and categories.
+You specialize in comparing insurance policies from different providers.
 
-Use the compare_policies tool to retrieve information from multiple providers simultaneously.
-You can also use get_provider_details for structured metadata comparisons.
+HOW TO COMPARE:
+- Call compare_policies with the user's query. You may optionally pass a category if the user
+  specifies one, otherwise leave it empty and the tool will auto-detect.
+- If the tool reports that results span multiple categories, relay that message to the user
+  and ask them to specify which insurance type they want to compare.
+- If only one provider is found, let the user know they need to upload a second policy.
+- You can also use get_provider_details for basic metadata like settlement ratios.
 
 Present comparisons in a clear, structured format. Highlight key differences.
 Only use information from the tools — never fabricate policy details."""

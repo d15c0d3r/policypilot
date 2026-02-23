@@ -31,6 +31,7 @@ function Chat() {
   const [streaming, setStreaming] = useState(false)
   const wsRef = useRef(null)
   const bottomRef = useRef(null)
+  const inputRef = useRef(null)
   const streamBuf = useRef('')
 
   useEffect(() => {
@@ -61,6 +62,7 @@ function Chat() {
           })
         } else if (data.type === 'end') {
           setStreaming(false)
+          setTimeout(() => inputRef.current?.focus(), 0)
         } else if (data.type === 'error') {
           setStreaming(false)
           setMessages((prev) => [...prev, { role: 'error', content: data.content }])
@@ -80,6 +82,7 @@ function Chat() {
     setMessages((prev) => [...prev, { role: 'user', content: text }])
     wsRef.current?.send(JSON.stringify({ message: text }))
     setInput('')
+    setTimeout(() => inputRef.current?.focus(), 0)
   }
 
   return (
@@ -98,6 +101,7 @@ function Chat() {
       </div>
       <form onSubmit={send} className="chat-input">
         <input
+          ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask about your policies…"
