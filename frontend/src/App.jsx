@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import './App.css'
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws/chat'
 
 function App() {
-  const [view, setView] = useState('chat')
+  const [view, setView] = useState('chat') // 'chat' | 'upload'
 
   return (
     <div className="shell">
@@ -16,7 +17,7 @@ function App() {
         </nav>
       </aside>
       <main className="main">
-        {view === 'chat' ? <Chat /> : <p style={{padding: '2rem', color: '#888'}}>Upload coming soon.</p>}
+        {view === 'chat' ? <Chat /> : <Upload />}
       </main>
     </div>
   )
@@ -105,6 +106,75 @@ function Chat() {
         />
         <button type="submit" disabled={streaming || !input.trim()}>Send</button>
       </form>
+    </div>
+  )
+}
+
+// ── Upload panel ──
+
+function Upload() {
+  const [categories, setCategories] = useState([])
+  const [category, setCategory] = useState('')
+  const [file, setFile] = useState(null)
+  const [status, setStatus] = useState(null)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/categories`)
+      .then((r) => r.json())
+      .then((d) => {
+        setCategories(d.categories || [])
+        if (d.categories?.length) setCategory(d.categories[0])
+      })
+      .catch(() => setStatus({ error: 'Failed to load categories' }))
+  }, [])
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (!file || !category) return
+    setStatus(null)
+    setLoading(true)
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('category', category)
+    try {
+      const res = await fetch(`${API_BASE}/api/upload`, { method: 'POST', body: fd })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        const msg = Array.isArray(data.detail) ? data.detail.map((d) => d.msg || d).join(', ') : (data.detail || res.statusText)
+        throw new Error(msg)
+      }
+      setStatus({ success: data.message || 'Uploaded. Ingestion started.' })
+      setFile(null)
+      e.target.reset()
+    } catch (err) {
+      setStatus({ error: err.message || 'Upload failed' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const label = (c) => c.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
+
+  return (
+    <div className="upload-panel">
+      <h2>Upload Policy PDF</h2>
+      <p className="subtitle">Choose the type and upload a PDF. It will be stored and indexed for search.</p>
+      <form onSubmit={handleSubmit} className="upload-form">
+        <div className="field">
+          <label htmlFor="category">PDF type</label>
+          <select id="category" value={category} onChange={(e) => setCategory(e.target.value)} required>
+            {categories.map((c) => <option key={c} value={c}>{label(c)}</option>)}
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor="file">PDF file</label>
+          <input id="file" type="file" accept=".pdf,application/pdf" onChange={(e) => setFile(e.target.files?.[0] || null)} required />
+        </div>
+        <button type="submit" disabled={loading || !file}>{loading ? 'Uploading…' : 'Upload & ingest'}</button>
+      </form>
+      {status?.success && <p className="status success">{status.success}</p>}
+      {status?.error && <p className="status error">{status.error}</p>}
     </div>
   )
 }
