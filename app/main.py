@@ -17,7 +17,7 @@ def main():
     thread_id = str(uuid.uuid4())
     config = {"configurable": {"thread_id": thread_id}}
 
-    print("\nHi. I'm PolicyPilot. Ask me about the policies you have uploaded.")
+    print("\nReady! Ask me about your uploaded policy documents.")
     print("Type 'quit' to exit.\n")
 
     while True:
@@ -25,6 +25,7 @@ def main():
         if not user_input:
             continue
         if user_input.lower() in ("quit", "exit", "q"):
+            print("Goodbye!")
             break
 
         result = graph.invoke(
